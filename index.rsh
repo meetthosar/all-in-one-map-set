@@ -26,7 +26,6 @@ export const main = Reach.App(() => {
 
   Deployer.pay([[numOfParticipants, token ]]);
   
-  
   // Deployer.interact.ready();
   // commit();
    
@@ -36,9 +35,8 @@ export const main = Reach.App(() => {
   const [ howMany ] =
     parallelReduce([numOfParticipants])
     .invariant(balance(token) ==  howMany)
-    .invariant(applicantSets.Map.size() == howMany)
+    // .invariant(applicantSets.Map.size() == howMany)
     .while( howMany > 0  )
-  
     .api_(Applicant.applyTheOffer, () => {
       check( this == Deployer, "you are the boss");
       check( !applicantSets.member(this), "yep" );
