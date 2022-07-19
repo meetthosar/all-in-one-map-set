@@ -5,17 +5,22 @@ export const main = Reach.App(() => {
   const Deployer = Participant('Deployer', {
     deadline: UInt,
     ready: Fun([], Null),
-    proposeOffer : Fun([],Tuple(Token, UInt))
+    token : Token,
+    units : UInt,
+    proposeOffer : Fun([],Tuple(Token, UInt)),
+    seeApplicants : Fun([Address], Null)
   });
 
   const Applicant = API('Applicant', {
-    applyTheOffer: Fun([], Bool),
+    applyTheOffer: Fun([Address], Bool),
     timesUp: Fun([], Bool),
   });
   init();
 
   Deployer.only(() => {
-    const [token, numOfParticipants] = declassify(interact.proposeOffer());
+    const token = declassify(interact.token);
+    const numOfParticipants = declassify(interact.units)
+    // const [token, numOfParticipants] = declassify(interact.proposeOffer());
     const deadline = declassify(interact.deadline);
     check(numOfParticipants != 0)
   });
@@ -24,38 +29,39 @@ export const main = Reach.App(() => {
   commit();
 
 
-  Deployer.pay([[numOfParticipants, token ]]);
+  Deployer.pay([[numOfParticipants, token]]);
+ 
   
   // Deployer.interact.ready();
   // commit();
    
-  const deadlineBlock = relativeTime(deadline);
+  const end = lastConsensusTime() + deadline;
   const applicantSets = new Set();
 
   const [ howMany ] =
     parallelReduce([numOfParticipants])
     .invariant(balance(token) ==  howMany)
-    // .invariant(applicantSets.Map.size() == howMany)
+    // .invariant(balance() == 0 && balance(token) == 0)
     .while( howMany > 0  )
-    .api_(Applicant.applyTheOffer, () => {
-      check( this == Deployer, "you are the boss");
-      check( !applicantSets.member(this), "yep" );
-    
-      return [ (k) => {
+    .api_(Applicant.applyTheOffer, (who) => {
+      // check( who == Deployer, "you are the boss");
+      check( !applicantSets.member(who), "You have Already received a token " );
+      return [ [], (k) => {
         k(true);
-        applicantSets.insert(this);
-        transfer(1, token).to(this);
-        
+        applicantSets.insert(who);
+        transfer(1, token).to(who);
+        Deployer.interact.seeApplicants(who);
         return [ howMany - 1 ];
       }];
     })
-    .timeout( deadlineBlock, () => {
+    .timeout( absoluteTime(end), () => {
       const [ [], k ] = call(Applicant.timesUp);
       k(true);
       return [ howMany ]
     }); 
-  
-  transfer(howMany, token).to(Deployer);
+  // const leftOvers = howMany;
+  transfer(balance(token), token).to(Deployer); 
+  transfer(balance()).to(Deployer);
   commit();
   exit();
 });
